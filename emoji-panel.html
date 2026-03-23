@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>WhatsApp Quantum V100</title>
+    <style>
+        :root {
+            --bg-dark: #0b141a;
+            --panel-bg: #121b22;
+            --text-gray: #8696a0;
+            --highlight: #00a884;
+            --sub-nav-bg: #000000;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: white;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- MEDIA PANEL --- */
+        #media-panel {
+            background: var(--panel-bg);
+            height: 450px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+
+        /* Top Tabs (Stays fixed) */
+        .top-tabs {
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            background: var(--panel-bg);
+            border-bottom: 1px solid #222;
+        }
+
+        .tab-btn {
+            padding: 8px 30px;
+            color: var(--text-gray);
+            font-size: 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: white;
+            border-bottom: 3px solid var(--highlight);
+        }
+
+        /* Scrolling Area */
+        .asset-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 15px;
+            scrollbar-width: thin;
+        }
+
+        .asset-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .asset-container::-webkit-scrollbar-thumb {
+            background: #374045;
+            border-radius: 3px;
+        }
+
+        .category-title {
+            color: var(--text-gray);
+            font-size: 13px;
+            font-weight: bold;
+            padding: 15px 0 10px 5px;
+            text-transform: uppercase;
+        }
+
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 12px;
+        }
+
+        .emoji-item {
+            font-size: 28px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .emoji-item:active { transform: scale(1.3); }
+
+        .gif-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .gif-item {
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+
+        .gif-item:hover {
+            transform: scale(1.02);
+        }
+
+        .gif-item img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* Sticker Grid */
+        .sticker-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .sticker-item {
+            font-size: 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.15s;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+
+        .sticker-item:hover {
+            transform: scale(1.1);
+            background: rgba(255,255,255,0.1);
+        }
+
+        .sticker-item:active {
+            transform: scale(1.2);
+        }
+
+        /* GIF Search */
+        .gif-search {
+            display: flex;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .gif-search input {
+            flex: 1;
+            padding: 10px 15px;
+            border-radius: 20px;
+            border: none;
+            background: #2a3942;
+            color: white;
+            font-size: 14px;
+        }
+
+        .gif-search input::placeholder {
+            color: var(--text-gray);
+        }
+
+        /* Bottom Black Nav (Icons) */
+        .bottom-nav {
+            background: var(--sub-nav-bg);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0;
+            border-top: 1px solid #1a1a1a;
+        }
+
+        .nav-icon {
+            color: var(--text-gray);
+            font-size: 18px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .nav-icon:hover { opacity: 1; color: white; }
+        .nav-icon.active { opacity: 1; color: var(--highlight); }
+
+        /* Input Mockup */
+        .footer-input {
+            padding: 10px;
+            background: var(--bg-dark);
+            border-bottom: 1px solid #222;
+        }
+
+        #msgInput {
+            width: 90%;
+            background: #2a3942;
+            border: none;
+            padding: 12px;
+            border-radius: 20px;
+            color: white;
+            margin: 0 auto;
+            display: block;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-gray);
+        }
+
+        .sticker-pack {
+            margin-bottom: 20px;
+        }
+
+        .sticker-pack-title {
+            color: var(--highlight);
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div style="flex:1;"></div>
+<div class="footer-input">
+    <input type="text" id="msgInput" placeholder="Message">
+</div>
+
+<div id="media-panel">
+    <div class="top-tabs">
+        <div class="tab-btn active" id="tabEmoji" onclick="showEmoji()">😊</div>
+        <div class="tab-btn" id="tabGIF" onclick="showGIF()">GIF</div>
+        <div class="tab-btn" id="tabSticker" onclick="showSticker()">🎭</div>
+    </div>
+
+    <div class="asset-container" id="contentArea"></div>
+
+    <div class="bottom-nav" id="bottomNav">
+        <div class="nav-icon active" onclick="scrollToCat('smileys')">🕒</div>
+        <div class="nav-icon" onclick="scrollToCat('smileys')">😃</div>
+        <div class="nav-icon" onclick="scrollToCat('animals')">🌿</div>
+        <div class="nav-icon" onclick="scrollToCat('food')">☕</div>
+        <div class="nav-icon" onclick="scrollToCat('activities')">⚽</div>
+        <div class="nav-icon" onclick="scrollToCat('travel')">🚗</div>
+        <div class="nav-icon" onclick="scrollToCat('objects')">💡</div>
+        <div class="nav-icon" onclick="scrollToCat('symbols')">🔣</div>
+        <div class="nav-icon" onclick="scrollToCat('flags')">🚩</div>
+    </div>
+</div>
+
+<script>
+const EMOJI_DATA = {
+    smileys: { title: "Smileys & People", data: ["😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚","😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😟","🤯","🧤","👑","👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️","👍","👎","✊","👊","🤛","🤜","👏","🙌","👐","🤲","🤝","🙏"] },
+    animals: { title: "Animals & Nature", data: ["🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐒","🐔","🐧","🐦","🐤","🐣","🐥","🦆","🦢","🦉","🦚","🦜","🐢","🐍","🦎","🦖","🦕","🐙","🐚","🦋","🐌","🐛","🐜","🐝","🪲","🐞","🦗","🪳","🕷️","🦂","🐢","🌸","🌺","🌻","🌹","🌷","🌼","🌱","🌲","🌳","🌴","🌵","🌾","🌿","☘️","🍀","🍁","🍂","🍃"] },
+    food: { title: "Food & Drink", data: ["🍏","🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🥔","🍠","🥐","🍞","🥖","🥨","🥯","🥞","🧀","🍔","🍟","🍕","🌭","🥪","🌮","🌯","🥙","🧆","🥚","🍳","🥘","🍲","🥣","🥗","🍿","🧈","🧂","🥫","🍱","🍘","🍙","🍚","🍛","🍜","🍝","🍠","🍢","🍣","🍤","🍥","🥮","🍡","🥟","🥠","🥡","🦀","🦞","🦐","🦑","🦪","🍦","🍧","🍨","🍩","🍪","🎂","🍰","🧁","🥧","🍫","🍬","🍭","🍮","🍯","☕","🫖","🍵","🍶","🍾","🍷","🍸","🍹","🍺","🍻","🥂","🥃","🥤","🧋","🧃","🧉","🧊"] },
+    activities: { title: "Activities", data: ["⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏉","🎱","🏓","🏸","🥅","🏒","🏑","🏏","⛳","🏹","🎣","🥊","🥋","⛸️","🎿","🛷","🛹","🏋️‍♂️","🤺","🤼‍♂️","🤸‍♂️","⛹️‍♂️","🚴‍♂️","🎮","🕹️","🎰","🧩","♟️","🎯","🎳","🎪","🎭","🎨","🎬","🎤","🎧","🎼","🎹","🥁","🎷","🎺","🎸","🪕","🎻","🎲","🏆","🥇","🥈","🥉","🏅","🎖️","🏵️","🎗️","🎫","🎟️"] },
+    travel: { title: "Travel & Places", data: ["🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🚚","🚛","🚜","🛴","🚲","🛵","🏍️","🚨","🚔","🚍","🚘","🚖","🚡","🚠","🚟","🚁","🛶","⛵","🚤","🛳️","✈️","🛫","🛬","🪂","💺","🚀","🛸","🏠","🏡","🏢","🏣","🏤","🏥","🏦","🏨","🏩","🏪","🏫","🏬","🏭","🏯","🏰","💒","🗼","🗽","⛪","🕌","🛕","🕍","⛩️","🕋","⛲","⛺","🌁","🌃","🏙️","🌄","🌅","🌆","🌇","🌉","🌌","🎠","🎡","🎢","💈","🎪"] },
+    objects: { title: "Objects", data: ["⌚","📱","📲","💻","⌨️","🖥️","🖨️","🖱️","🖲️","🕹️","🗜️","💽","💾","💿","📀","📼","📷","📸","📹","🎥","📽️","🎞️","📞","📟","📠","📺","📻","🎙️","🎚️","🎛️","🧭","⏱️","⏲️","⏰","🕰️","⌛","⏳","📡","🔋","🔌","💡","🔦","🕯️","🧯","🛢️","💸","💵","💴","💶","💷","💰","💳","💎","⚖️","🧰","🔧","🔨","⚒️","🛠️","⛏️","🔩","⚙️","🧱","⛓️","🧲","🔫","💣","🧨","🪓","🔪","🗡️","⚔️","🛡️","🚬","⚰️","🪦","⚱️","🏺","🔮","📿","🧿","💈","⚗️","🔭","🔬","🕳️","🩹","🩺","💊","💉","🩸","🧬","🦠","🧫","🧪","🌡️","🧹","🧺","🧻","🚽","🚰","🚿","🛁","🛀","🧼","🪥","🪒","🧽","🧴","🛎️","🔑","🗝️","🚪","🪑","🛋️","🛏️","🛌","🧸","🖼️","🛍️","🛒","🎁","🎈","🎏","🎀","🎊","🎉","🎎","🏮","🎐","🧧","✉️","📩","📨","📧","💌","📥","📤","📦","🏷️","📪","📫","📬","📭","📮","📯","📜","📃","📄","📑","🧾","📊","📈","📉","🗒️","🗓️","📆","📅","🗑️","📇","🗃️","🗳️","🗄️","📋","📁","📂","🗂️","🗞️","📰","📓","📔","📒","📕","📗","📘","📙","📚","📖","🔖","🧷","🔗","📎","🖇️","📐","📏","🧮","📌","📍","✂️","🖊️","🖋️","✒️","🖌️","🖍️","📝","✏️","🔍","🔎","🔏","🔐","🔒","🔓"] },
+    symbols: { title: "Symbols", data: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💘","💝","💟","☮️","✝️","☪️","🕉️","☸️","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓","🆔","⚛️","🉑","☢️","☣️","📴","📳","🈶","🈚","🈸","🈺","🈷️","✴️","🆚","💮","🉐","㊙️","㊗️","🈴","🈵","🈹","🈲","🅰️","🅱️","🆎","🆑","🅾️","🆘","❌","⭕","🛑","⛔","📛","🚫","💯","💢","♨️","🚷","🚯","🚳","🚱","🔞","📵","🚭","❗","❕","❓","❔","‼️","⁉️","🔅","🔆","〽️","⚠️","🚸","🔱","⚜️","🔰","♻️","✅","🈯","💹","❇️","✳️","❎","🌐","💠","Ⓜ️","🌀","💤","🏧","🚾","♿","🅿️","🛗","🈳","🈂️","🛂","🛃","🛄","🛅","🚹","🚺","🚼","⚧","🚻","🚮","🎦","📶","🈁","🔣","ℹ️","🔤","🔡","🔠","🆖","🆗","🆙","🆒","🆕","🆓","0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟","🔢","#️⃣","*️⃣","⏏️","▶️","⏸️","⏯️","⏹️","⏺️","⏭️","⏮️","⏩","⏪","⏫","⏬","◀️","🔼","🔽","➡️","⬅️","⬆️","⬇️","↗️","↘️","↙️","↖️","↕️","↔️","↪️","↩️","⤴️","⤵️","🔀","🔁","🔂","🔄","🔃","🎵","🎶","➕","➖","➗","✖️","🟰","♾️","💲","💱","™️","©️","®️","👁️‍🗨️","🔚","🔙","🔛","🔝","🔜","〰️","➰","➿","✔️","☑️","🔘","🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤","🔺","🔻","🔸","🔹","🔶","🔷","🔳","🔲","▪️","▫️","◾","◽","◼️","◻️","🟥","🟧","🟨","🟩","🟦","🟪","⬛","⬜","🟫","🔈","🔇","🔉","🔊","🔔","🔕","📣","📢","👁️","🗨️","💭","🗯️","♠️","♣️","♥️","♦️","🃏","🎴","🀄","🕐","🕑","🕒","🕓","🕔","🕕","🕖","🕗","🕘","🕙","🕚","🕛","🕜","🕝","🕞","🕟","🕠","🕡","🕢","🕣","🕤","🕥","🕦","🕧"] },
+    flags: { title: "Flags", data: ["🏁","🚩","🎌","🏴","🏳️","🏳️‍🌈","🏳️‍⚧️","🏴‍☠️","🇦🇫","🇦🇽","🇦🇱","🇩🇿","🇦🇸","🇦🇩","🇦🇴","🇦🇮","🇦🇶","🇦🇬","🇦🇷","🇦🇲","🇦🇼","🇦🇺","🇦🇹","🇦🇿","🇧🇸","🇧🇭","🇧🇩","🇧🇧","🇧🇾","🇧🇪","🇧🇿","🇧🇯","🇧🇲","🇧🇹","🇧🇴","🇧🇦","🇧🇼","🇧🇷","🇮🇴","🇻🇬","🇧🇳","🇧🇬","🇧🇫","🇧🇮","🇰🇭","🇨🇲","🇨🇦","🇮🇨","🇨🇻","🇧🇶","🇰🇾","🇨🇫","🇹🇩","🇨🇱","🇨🇳","🇨🇽","🇨🇨","🇨🇴","🇰🇲","🇨🇬","🇨🇩","🇨🇰","🇨🇷","🇨🇮","🇭🇷","🇨🇺","🇨🇼","🇨🇾","🇨🇿","🇩🇰","🇩🇯","🇩🇲","🇩🇴","🇪🇨","🇪🇬","🇸🇻","🇬🇶","🇪🇷","🇪🇪","🇸🇿","🇪🇹","🇪🇺","🇫🇰","🇫🇴","🇫🇯","🇫🇮","🇫🇷","🇬🇫","🇵🇫","🇹🇫","🇬🇦","🇬🇲","🇬🇪","🇩🇪","🇬🇭","🇬🇮","🇬🇷","🇬🇱","🇬🇩","🇬🇵","🇬🇺","🇬🇹","🇬🇬","🇬🇳","🇬🇼","🇬🇾","🇭🇹","🇭🇳","🇭🇰","🇭🇺","🇮🇸","🇮🇳","🇮🇩","🇮🇷","🇮🇶","🇮🇪","🇮🇲","🇮🇱","🇮🇹","🇯🇲","🇯🇵","🎌","🇯🇪","🇯🇴","🇰🇿","🇰🇪","🇰🇮","🇽🇰","🇰🇼","🇰🇬","🇱🇦","🇱🇻","🇱🇧","🇱🇸","🇱🇷","🇱🇾","🇱🇮","🇱🇹","🇱🇺","🇲🇴","🇲🇬","🇲🇼","🇲🇾","🇲🇻","🇲🇱","🇲🇹","🇲🇭","🇲🇶","🇲🇷","🇲🇺","🇾🇹","🇲🇽","🇫🇲","🇲🇩","🇲🇨","🇲🇳","🇲🇪","🇲🇸","🇲🇦","🇲🇿","🇲🇲","🇳🇦","🇳🇷","🇳🇵","🇳🇱","🇳🇨","🇳🇿","🇳🇮","🇳🇪","🇳🇬","🇳🇺","🇳🇫","🇰🇵","🇲🇰","🇲🇵","🇳🇴","🇴🇲","🇵🇰","🇵🇼","🇵🇸","🇵🇦","🇵🇬","🇵🇾","🇵🇪","🇵🇭","🇵🇳","🇵🇱","🇵🇹","🇵🇷","🇶🇦","🇷🇪","🇷🇴","🇷🇺","🇷🇼","🇼🇸","🇸🇲","🇸🇹","🇸🇦","🇸🇳","🇷🇸","🇸🇨","🇸🇱","🇸🇬","🇸🇽","🇸🇰","🇸🇮","🇬🇸","🇸🇧","🇸🇴","🇿🇦","🇰🇷","🇸🇸","🇪🇸","🇱🇰","🇧🇱","🇸🇭","🇰🇳","🇱🇨","🇵🇲","🇻🇨","🇸🇩","🇸🇷","🇸🇪","🇨🇭","🇸🇾","🇹🇼","🇹🇯","🇹🇿","🇹🇭","🇹🇱","🇹🇬","🇹🇰","🇹🇴","🇹🇹","🇹🇳","🇹🇷","🇹🇲","🇹🇨","🇹🇻","🇻🇮","🇺🇬","🇺🇦","🇦🇪","🇬🇧","🏴󠁧󠁢󠁥󠁮󠁧󠁿","🏴󠁧󠁢󠁳󠁣󠁴󠁿","🏴󠁧󠁢󠁷󠁬󠁳󠁿","🇺🇸","🇺🇾","🇺🇿","🇻🇺","🇻🇦","🇻🇪","🇻🇳","🇼🇫","🇪🇭","🇾🇪","🇿🇲","🇿🇼"] }
+};
+
+// Working GIF URLs from Giphy (direct embed URLs)
+const GIF_DATA = [
+    { url: "https://media.giphy.com/media/3o7abKhOpuMcmLjdcI/giphy.gif", title: "Thumbs Up" },
+    { url: "https://media.giphy.com/media/l0MYEqEzwMWFCg8rm/giphy.gif", title: "OK" },
+    { url: "https://media.giphy.com/media/3o7TKSjPqcK97-fM08/giphy.gif", title: "Thank You" },
+    { url: "https://media.giphy.com/media/l41lTfuxV3AnfXNug/giphy.gif", title: "Hello" },
+    { url: "https://media.giphy.com/media/3oEduS33p6yvFz7Bq8/giphy.gif", title: "Love" },
+    { url: "https://media.giphy.com/media/l0HlIDWvGs2p80u9a/giphy.gif", title: "Happy" },
+    { url: "https://media.giphy.com/media/xT9IgG50Fb7Mi0prBC/giphy.gif", title: "Excited" },
+    { url: "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif", title: "Celebrate" },
+    { url: "https://media.giphy.com/media/g9582DNuQppxC/giphy.gif", title: "Laugh" },
+    { url: "https://media.giphy.com/media/LmNwrBhejkK9EFP504/giphy.gif", title: "Party" },
+    { url: "https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif", title: "Dance" },
+    { url: "https://media.giphy.com/media/3oz8xIsloV7zOmt81G/giphy.gif", title: "Cool" },
+    { url: "https://media.giphy.com/media/l0HlvtIPzPdt2usKs/giphy.gif", title: "WoW" },
+    { url: "https://media.giphy.com/media/3oriO0OEd9QIDdllqo/giphy.gif", title: "Clap" },
+    { url: "https://media.giphy.com/media/xT5LMHxhOfscxPfIfm/giphy.gif", title: "Fire" },
+    { url: "https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif", title: "Heart" }
+];
+
+// Extended Sticker Data
+const STICKER_DATA = {
+    animals: {
+        title: "🐾 Animals & Pets",
+        stickers: ["🦁","🐯","🦊","🐰","🐻","🐼","🐨","🦄","🐸","🦋","🐶","🐱","🐭","🐹","🐰","🦇","🐻‍❄️","🐲","🦖","🦕","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐬","🐳","🦈","🐊","🐆","🐅","🦓","🦍","🦧","🐘","🦛","🦏","🐪","🦒","🦘","🦬","🐂","🐃","🐄","🐎","🐖","🐏","🐑","🦙","🐐","🦌","🐕","🐩","🦮","🐈","🐓","🦃","🦤","🦚","🦜","🦢","🦩","🕊️","🐇","🦝","🦨","🦡","🦫","🦦","🦥","🐁","🐀","🐿️","🦔"]
+    },
+    faces: {
+        title: "😂 Funny Faces",
+        stickers: ["😂","🤣","😭","😅","😆","🥹","🤩","😍","🥰","😘","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑","😶","😏","😒","🙄","😬","😮‍💨","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤮","🥵","🥶","🥴","😵","😵‍💫","🤯","🤠","🥳","🥸","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯","😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩","😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖"]
+    },
+    love: {
+        title: "❤️ Love & Hearts",
+        stickers: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❤️‍🔥","❤️‍🩹","❣️","💕","💞","💓","💗","💖","💘","💝","💟","♥️","😍","🥰","😘","💋","💑","👩‍❤️‍👨","👨‍❤️‍👨","👩‍❤️‍👩","💏","👩‍❤️‍💋‍👨","👨‍❤️‍💋‍👨","👩‍❤️‍💋‍👩","🌹","💐","🌷","🌸","💮","🏵️","🌺","🌻","🌼","🥀","💍","💎","🕊️","🦋"]
+    },
+    gestures: {
+        title: "👋 Hand Gestures",
+        stickers: ["👍","👎","👊","✊","🤛","🤜","👏","🙌","👐","🤲","🤝","🙏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️","👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✍️","🤳","💪","🦾","🦿","🦵","🦶","👂","🦻","👃","🧠","🫀","🫁","🦷","🦴","👀","👁️","👅","👄","💋","🫦"]
+    },
+    celebration: {
+        title: "🎉 Celebration",
+        stickers: ["🎉","🎊","🎈","🎁","🎀","🎗️","🏆","🥇","🥈","🥉","🏅","🎖️","🏵️","🎂","🍰","🧁","🥂","🍾","🥳","🤩","✨","🌟","⭐","💫","🎆","🎇","🧨","🎄","🎃","🎭","🎪","🎢","🎡","🎠","🎟️","🎫"]
+    },
+    food: {
+        title: "🍕 Food & Drinks",
+        stickers: ["🍕","🍔","🍟","🌭","🥪","🌮","🌯","🥙","🧆","🥚","🍳","🥘","🍲","🥣","🥗","🍿","🧈","🧂","🥫","🍱","🍘","🍙","🍚","🍛","🍜","🍝","🍠","🍢","🍣","🍤","🍥","🥮","🍡","🥟","🥠","🥡","🍦","🍧","🍨","🍩","🍪","🎂","🍰","🧁","🥧","🍫","🍬","🍭","🍮","🍯","🍼","🥛","☕","🫖","🍵","🧃","🥤","🧋","🍶","🍺","🍻","🥂","🍷","🥃","🍸","🍹","🧉","🍾","🧊"]
+    },
+    sports: {
+        title: "⚽ Sports & Games",
+        stickers: ["⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏉","🥏","🎱","🪀","🏓","🏸","🏒","🏑","🥍","🏏","🪃","🥅","⛳","🪁","🏹","🎣","🤿","🥊","🥋","🎽","🛹","🛼","🛷","⛸️","🥌","🎿","⛷️","🏂","🪂","🏋️","🤼","🤸","⛹️","🤺","🤾","🏌️","🏇","⛷️","🏊","🚣","🏄","🧗","🚵","🚴","🎮","🕹️","🎰","🎲","🧩","♟️","🎯","🎳","🎪","🎭"]
+    },
+    nature: {
+        title: "🌸 Nature & Weather",
+        stickers: ["🌸","🌺","🌻","🌹","🌷","🌼","💐","🌾","🌿","☘️","🍀","🍁","🍂","🍃","🌲","🌳","🌴","🌵","🪴","🎋","🎍","🪺","🪹","🍄","🐚","🪨","🌾","💧","🌊","🌈","☀️","🌤️","⛅","🌥️","☁️","🌦️","🌧️","⛈️","🌩️","🌨️","❄️","☃️","⛄","🌬️","💨","🌪️","🌫️","🌊","💧","💦","☔","☂️","🌂","⚡","❄️","🔥","💥","✨","🌟","⭐","💫","🌙","🌛","🌜","🌚","🌝","🌞"]
+    }
+};
+
+const content = document.getElementById('contentArea');
+const bottomNav = document.getElementById('bottomNav');
+
+function setActiveTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+}
+
+function showEmoji() {
+    setActiveTab('tabEmoji');
+    bottomNav.style.display = 'flex';
+    content.innerHTML = '';
+    
+    for (let cat in EMOJI_DATA) {
+        const section = document.createElement('div');
+        section.id = 'cat-' + cat;
+        section.innerHTML = `<div class="category-title">${EMOJI_DATA[cat].title}</div>`;
+        const grid = document.createElement('div');
+        grid.className = 'asset-grid';
+        
+        EMOJI_DATA[cat].data.forEach(emoji => {
+            const span = document.createElement('div');
+            span.className = 'emoji-item';
+            span.innerText = emoji;
+            span.onclick = () => {
+                document.getElementById('msgInput').value += emoji;
+                // Add haptic feedback simulation
+                span.style.transform = 'scale(1.3)';
+                setTimeout(() => span.style.transform = 'scale(1)', 100);
+            };
+            grid.appendChild(span);
+        });
+        
+        section.appendChild(grid);
+        content.appendChild(section);
+    }
+}
+
+function showGIF() {
+    setActiveTab('tabGIF');
+    bottomNav.style.display = 'none';
+    
+    content.innerHTML = `
+        <div class="gif-search">
+            <input type="text" placeholder="Search GIFs..." id="gifSearch" oninput="filterGifs(this.value)">
+        </div>
+        <div class="category-title">🔥 Trending GIFs</div>
+    `;
+    
+    const grid = document.createElement('div');
+    grid.className = 'asset-grid gif-grid';
+    grid.id = 'gifGrid';
+    
+    GIF_DATA.forEach(gif => {
+        const item = document.createElement('div');
+        item.className = 'gif-item';
+        item.innerHTML = `<img src="${gif.url}" alt="${gif.title}" loading="lazy" onerror="this.parentElement.style.display='none'">`;
+        item.onclick = () => {
+            // Send GIF URL
+            alert('GIF Selected: ' + gif.title);
+            document.getElementById('msgInput').value = gif.url;
+        };
+        grid.appendChild(item);
+    });
+    
+    content.appendChild(grid);
+}
+
+function filterGifs(query) {
+    const grid = document.getElementById('gifGrid');
+    if (!query) {
+        showGIF();
+        return;
+    }
+    // Filter based on title
+    grid.innerHTML = '';
+    GIF_DATA.filter(g => g.title.toLowerCase().includes(query.toLowerCase())).forEach(gif => {
+        const item = document.createElement('div');
+        item.className = 'gif-item';
+        item.innerHTML = `<img src="${gif.url}" alt="${gif.title}" loading="lazy">`;
+        item.onclick = () => {
+            document.getElementById('msgInput').value = gif.url;
+        };
+        grid.appendChild(item);
+    });
+}
+
+function showSticker() {
+    setActiveTab('tabSticker');
+    bottomNav.style.display = 'none';
+    
+    content.innerHTML = '';
+    
+    for (let pack in STICKER_DATA) {
+        const section = document.createElement('div');
+        section.className = 'sticker-pack';
+        section.innerHTML = `<div class="sticker-pack-title">${STICKER_DATA[pack].title}</div>`;
+        
+        const grid = document.createElement('div');
+        grid.className = 'asset-grid sticker-grid';
+        
+        STICKER_DATA[pack].stickers.forEach(sticker => {
+            const item = document.createElement('div');
+            item.className = 'sticker-item';
+            item.innerText = sticker;
+            item.onclick = () => {
+                document.getElementById('msgInput').value += sticker;
+                item.style.transform = 'scale(1.2)';
+                setTimeout(() => item.style.transform = 'scale(1)', 150);
+            };
+            grid.appendChild(item);
+        });
+        
+        section.appendChild(grid);
+        content.appendChild(section);
+    }
+}
+
+function scrollToCat(id) {
+    const el = document.getElementById('cat-' + id);
+    if(el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+        // Update active nav
+        document.querySelectorAll('.nav-icon').forEach(n => n.classList.remove('active'));
+        event.target.classList.add('active');
+    }
+}
+
+// Initialize
+showEmoji();
+</script>
+</body>
+</html>
