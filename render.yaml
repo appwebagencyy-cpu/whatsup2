@@ -1,0 +1,28 @@
+services:
+  # 🚀 WaveChat Backend (Node.js)
+  - type: web
+    name: whatsup1
+    env: node
+    plan: free # Upgrade to 'starter' if you need more power
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: ZEGO_APP_ID
+        value: 1568137408
+      - key: ZEGO_SERVER_SECRET
+        value: 93198c031342de49f9c4b24bb0c07ece
+      - key: PORT
+        value: 5000
+      - key: CLOUDINARY_CLOUD_NAME
+        value: dybcuirkk
+      - key: CLOUDINARY_API_KEY
+        value: 232928768533766
+      - key: CLOUDINARY_API_SECRET
+        value: z3XHBN1ZrYp2wLPqb4lCEPNurzE
+      - key: DB_PATH
+        value: /data/wavechat.db # Persistent storage path
+    disk:
+      name: wavechat-storage
+      mountPath: /data
+      sizeGB: 1
