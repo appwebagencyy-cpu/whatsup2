@@ -1764,6 +1764,13 @@ io.on('connection', (socket) => {
                 console.log(`✅ [Smart Route] User ${data.receiverId} is ONLINE.`);
                 io.to(receiverSocketId).emit('incoming_call', payload);
             }
+            
+            // 🛡️ [Room Fallback] Always emit to ID rooms for better reliability
+            const rooms = new Set([cleanTo, data.receiverId, '+' + cleanTo]);
+            rooms.forEach(room => {
+                socket.to(room).emit('incoming_call', payload);
+            });
+            console.log(`📡 [Broadcasting] Call signal sent to Rooms: ${Array.from(rooms).join(', ')}`);
 
             // 3. FCM Wake-up (FIX: sendCallNotification was UNDEFINED — using sendPushNotification)
             try {
