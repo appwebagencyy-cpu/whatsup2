@@ -862,6 +862,35 @@ app.post('/api/messages/:messageId/reaction', async (req, res) => {
     }
 });
 
+// ====== BLOCK USER APIs ======
+app.get('/api/users/:userId/blocked', async (req, res) => {
+    try {
+        const cleanId = String(req.params.userId).replace(/\D/g, '').slice(-10);
+        const blockedUsers = await db.all("SELECT blockedUserId FROM blocked_users WHERE userId = ?", [cleanId]);
+        res.json(blockedUsers.map(b => b.blockedUserId));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/users/block', async (req, res) => {
+    try {
+        const { userId, blockedUserId, action } = req.body; // action: 'block' or 'unblock'
+        const cleanUser = String(userId).replace(/\D/g, '').slice(-10);
+        const cleanBlocked = String(blockedUserId).replace(/\D/g, '').slice(-10);
+        
+        if (action === 'unblock') {
+            await db.run("DELETE FROM blocked_users WHERE userId = ? AND blockedUserId = ?", [cleanUser, cleanBlocked]);
+        } else {
+            const isMySQL = db.constructor.name === 'MySQLWrapper';
+            const query = isMySQL ? 
+                "INSERT IGNORE INTO blocked_users (userId, blockedUserId) VALUES (?, ?)" :
+                "INSERT OR IGNORE INTO blocked_users (userId, blockedUserId) VALUES (?, ?)";
+            await db.run(query, [cleanUser, cleanBlocked]);
+        }
+        res.json({ success: true, blockedUserId: cleanBlocked, action });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// ==============================
+
 app.get('/api/chats/:userId', async (req, res) => {
     const rawUserId = req.params.userId;
     const clean = (id) => String(id).replace(/\D/g, '').slice(-10);
@@ -1275,6 +1304,24 @@ io.on('connection', (socket) => {
 
         try {
             const isMySQL = db.constructor.name === 'MySQLWrapper';
+
+            // 🛑 BLOCK CHECK
+            // Find who the receiver is if it's a 1-to-1 chat
+            if (String(chatId).includes('_')) {
+                const parts = String(chatId).split('_');
+                const senderClean = clean(sender);
+                const other = parts.find(p => clean(p) !== senderClean) || parts.find(p => p !== sender);
+                if (other) {
+                    const otherClean = clean(other);
+                    const isBlocked = await db.get("SELECT id FROM blocked_users WHERE userId = ? AND blockedUserId = ?", [otherClean, senderClean]);
+                    if (isBlocked) {
+                        console.log(`🚫 [BLOCK] Message dropped! ${senderClean} is blocked by ${otherClean}`);
+                        // Fake ack so sender sees 1 tick
+                        socket.emit('message_ack', { tempId: data.id, realId: data.id, status: 'sent', chatId: normChatId });
+                        return; // Stop execution
+                    }
+                }
+            }
             let actualId;
             const replyToString = replyTo ? JSON.stringify(replyTo) : null; // Stringify for storage
 
