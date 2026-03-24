@@ -264,6 +264,15 @@ async function createTables(db) {
             );
         `);
         await db.exec(`
+            CREATE TABLE IF NOT EXISTS blocked_users (
+                id ${primaryKey},
+                userId VARCHAR(255),
+                blockedUserId VARCHAR(255),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(userId, blockedUserId)
+            );
+        `);
+        await db.exec(`
             CREATE TABLE IF NOT EXISTS calls (
                 id ${primaryKey},
                 callerId VARCHAR(255),
@@ -325,3 +334,4 @@ async function createTables(db) {
 }
 
 module.exports = { initDB, getDB: () => pool ? new MySQLWrapper(pool) : require('sqlite').open() };
+
