@@ -623,50 +623,7 @@ app.post('/api/register-device', async (req, res) => {
     }
 });
 
-// ========================
-// E2E ENCRYPTION: Key Exchange APIs
-// ========================
-
-// Upload public key
-app.post('/api/keys/upload', async (req, res) => {
-    const { userId, publicKey } = req.body;
-    if (!userId || !publicKey) return res.status(400).json({ error: 'Missing userId or publicKey' });
-
-    try {
-        const isMySQL = db.constructor.name === 'MySQLWrapper';
-        const q = isMySQL
-            ? "INSERT INTO encryption_keys (userId, publicKey, updatedAt) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE publicKey = VALUES(publicKey), updatedAt = NOW()"
-            : "INSERT OR REPLACE INTO encryption_keys (userId, publicKey, updatedAt) VALUES (?, ?, datetime('now'))";
-        await db.run(q, [userId, publicKey]);
-        console.log(`🔐 Public key stored for ${userId}`);
-        res.json({ success: true });
-    } catch (err) {
-        console.error('Key upload error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get public key for a user
-app.get('/api/keys/:userId', async (req, res) => {
-    try {
-        const userId = req.params.userId;
-        const cleanId = String(userId).replace(/\D/g, '').slice(-10);
-
-        let row = await db.get("SELECT publicKey FROM encryption_keys WHERE userId = ?", [userId]);
-        if (!row) {
-            // Try with cleaned phone number
-            row = await db.get("SELECT publicKey FROM encryption_keys WHERE userId LIKE ?", [`%${cleanId}`]);
-        }
-
-        if (row && row.publicKey) {
-            res.json({ publicKey: row.publicKey });
-        } else {
-            res.status(404).json({ error: 'No key found' });
-        }
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+// E2E APIs Removed
 
 // Force Migration Endpoint
 app.get('/api/migrate-fcm', async (req, res) => {
