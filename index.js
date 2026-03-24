@@ -1394,6 +1394,26 @@ io.on('connection', (socket) => {
             }
         } catch (err) { console.error(err); }
     });
+
+    socket.on('delete_chat', async (chatId) => {
+        try {
+            const clean = (id) => String(id).replace(/\D/g, '').slice(-10);
+            const userIdClean = clean(userId);
+            let normChatId = String(chatId).includes('_') ? String(chatId).split('_').map(clean).sort().join('_') : String(chatId);
+
+            // Insert or replace into deleted_chats table
+            const isMySQL = db.constructor.name === 'MySQLWrapper';
+            const query = isMySQL
+                ? "INSERT IGNORE INTO deleted_chats (userId, chatId) VALUES (?, ?)"
+                : "INSERT OR IGNORE INTO deleted_chats (userId, chatId) VALUES (?, ?)";
+            
+            await db.run(query, [userIdClean, normChatId]);
+            console.log(`🗑️ [SERVER] User ${userIdClean} deleted chat ${normChatId}`);
+        } catch (err) {
+            console.error('❌ Delete chat error:', err.message);
+        }
+    });
+
     socket.on('mark_read', async ({ chatId, readerId }) => {
         console.log('👁 [SERVER] SEEN EVENT RECEIVED - Chat:', chatId, 'Reader:', readerId);
 
