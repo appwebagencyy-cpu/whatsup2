@@ -97,6 +97,36 @@ cloudinary.config({
 
 const app = express();
 
+// FCM Token Registration Endpoint
+app.post('/api/register-fcm-token', async (req, res) => {
+    const { userId, token, deviceName, platform } = req.body;
+    if (!userId || !token) return res.status(400).json({ error: 'UserId and Token are required' });
+
+    try {
+        const clean = (id) => String(id).replace(/\D/g, '').slice(-10);
+        const userIdClean = clean(userId);
+        const device = deviceName || 'Android Device';
+
+        console.log(`🔥 [FCM] Registering token for user ${userId} (${userIdClean}): ${token.substring(0, 10)}...`);
+
+        // 1. Update primary user record
+        await db.run("UPDATE users SET fcmToken = ? WHERE id = ? OR phone LIKE ?", [token, userId, `%${userIdClean}`]);
+
+        // 2. Add to user_devices for multi-device support
+        const isMySQL = db.constructor.name === 'MySQLWrapper';
+        const deviceQuery = isMySQL
+            ? "INSERT INTO user_devices (userId, token, deviceName, platform) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE lastActive = CURRENT_TIMESTAMP"
+            : "INSERT OR REPLACE INTO user_devices (userId, token, deviceName, platform) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+        
+        await db.run(deviceQuery, [userId, token, device, platform || 'android']);
+
+        res.json({ success: true, message: 'Token registered successfully' });
+    } catch (err) {
+        console.error('❌ FCM Registration Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.use((req, res, next) => {
     res.setHeader('ngrok-skip-browser-warning', 'true');
     next();
@@ -1380,26 +1410,40 @@ io.on('connection', (socket) => {
                 if (other) {
                     try {
                         const otherClean = clean(other);
-                        console.log(`🔔 [PUSH] Looking for receiver token. Other: ${other}, OtherClean: ${otherClean}, Sender: ${sender}`);
-                        // Try to find receiver's FCM token
-                        const receiver = await db.get(
+                        const senderClean = clean(sender);
+
+                        // Multi-Device: Get all tokens
+                        const devices = await db.all(
+                            "SELECT token FROM user_devices WHERE userId = ? OR userId LIKE ?",
+                            [other, `%${otherClean}`]
+                        ).catch(() => []);
+
+                        // Primary token fall-back
+                        const user = await db.get(
                             "SELECT fcmToken, name FROM users WHERE id = ? OR phone LIKE ? OR phone LIKE ?",
                             [other, `%${otherClean}`, otherClean]
                         );
 
-                        if (receiver && receiver.fcmToken) {
+                        // Collect all valid tokens
+                        const tokens = new Set();
+                        if (user?.fcmToken) tokens.add(user.fcmToken);
+                        devices.forEach(d => { if (d.token) tokens.add(d.token); });
+
+                        if (tokens.size > 0) {
                             const senderUser = await db.get("SELECT name FROM users WHERE id = ? OR phone LIKE ?", [sender, `%${senderClean}`]);
                             const senderName = senderUser?.name || data.senderName || 'Someone';
 
-                            console.log(`🔔 [PUSH] Sending message push to ${other} from ${senderName}`);
-                            await sendPushNotification(
-                                receiver.fcmToken,
-                                senderName,
-                                previewText,
-                                { chatId: normChatId, type: 'message', senderId: sender }
-                            );
+                            console.log(`🔔 [PUSH] Sending message push to ${tokens.size} devices for user ${other}`);
+                            for (const token of tokens) {
+                                await sendPushNotification(
+                                    token,
+                                    senderName,
+                                    previewText,
+                                    { chatId: normChatId, type: 'message', senderId: sender }
+                                );
+                            }
                         } else {
-                            console.log('⏭️ No FCM token for receiver:', other, 'DB result:', JSON.stringify(receiver));
+                            console.log('⏭️ No FCM token for receiver:', other);
                         }
                     } catch (pushErr) {
                         console.error('❌ Push notification error:', pushErr.message);
@@ -1775,17 +1819,19 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // 2. Normal Call Flow
+            // Normal Call Flow
             const receiverSocketId = getSocketIdByUserId(data.receiverId);
-            const payload = { ...data, callId, from: socket.id };
+            const actualCallType = data.type || data.callType || 'audio';
+            const callerName = data.callerName || 'Someone';
+            const payload = { ...data, callId, from: socket.id, type: actualCallType, callerName };
 
             // Log the call
             await db.run("INSERT INTO calls (callerId, receiverId, type, status) VALUES (?, ?, ?, ?)",
-                [data.callerId, data.receiverId, data.callType || 'audio', 'ringing']);
+                [data.callerId, data.receiverId, actualCallType, 'ringing']);
 
-            // Signal via Socket if online
+            // Signal via Socket (Direct Smart Route)
             if (receiverSocketId) {
-                console.log(`✅ [Smart Route] User ${data.receiverId} is ONLINE.`);
+                console.log(`✅ [Smart Route] User ${data.receiverId} is ONLINE. Socket: ${receiverSocketId}`);
                 io.to(receiverSocketId).emit('incoming_call', payload);
             }
             
@@ -1796,16 +1842,38 @@ io.on('connection', (socket) => {
             });
             console.log(`📡 [Broadcasting] Call signal sent to Rooms: ${Array.from(rooms).join(', ')}`);
 
-            // 3. FCM Wake-up (FIX: sendCallNotification was UNDEFINED — using sendPushNotification)
+            // 3. FCM Wake-up: Get all registered tokens for receiver
             try {
-                const callReceiver = await db.get("SELECT fcmToken FROM users WHERE id = ? OR phone LIKE ?", [data.receiverId, `%${cleanTo}`]);
-                if (callReceiver?.fcmToken) {
-                    await sendPushNotification(callReceiver.fcmToken, `${data.callerName || 'Someone'} is calling`, 'Incoming call', {
-                        type: 'call_offer', callId, callerId: String(data.callerId), callerName: data.callerName || 'Someone', callType: data.callType || 'audio'
-                    });
-                    console.log(`📱 [FCM] Call notification sent to ${data.receiverId}`);
+                // Multi-Device: Try user_devices table
+                const devices = await db.all(
+                    "SELECT token FROM user_devices WHERE userId = ? OR userId LIKE ?",
+                    [data.receiverId, `%${cleanTo}`]
+                ).catch(() => []);
+
+                // Fallback: Primary token in users table
+                const callReceiver = await db.get(
+                    "SELECT fcmToken FROM users WHERE id = ? OR phone LIKE ?", 
+                    [data.receiverId, `%${cleanTo}`]
+                );
+
+                // Collect all valid tokens to notify all devices
+                const tokens = new Set();
+                if (callReceiver?.fcmToken) tokens.add(callReceiver.fcmToken);
+                devices.forEach(d => { if (d.token) tokens.add(d.token); });
+
+                if (tokens.size > 0) {
+                    console.log(`📱 [FCM] Sending call notification to ${tokens.size} devices for user ${data.receiverId}`);
+                    for (const token of tokens) {
+                        await sendPushNotification(token, `${callerName} is calling`, 'Incoming call', {
+                            type: 'call_offer', 
+                            callId, 
+                            callerId: String(data.callerId), 
+                            callerName: callerName, 
+                            callType: actualCallType
+                        });
+                    }
                 } else {
-                    console.log(`⚠️ [FCM] No FCM token for ${data.receiverId} — relying on Socket only`);
+                    console.log(`⚠️ [FCM] No FCM token for ${data.receiverId} — only socket signals sent`);
                 }
             } catch (fcmErr) { console.error('FCM call_offer error:', fcmErr); }
 
