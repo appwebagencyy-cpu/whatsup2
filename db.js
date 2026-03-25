@@ -318,6 +318,18 @@ async function createTables(db) {
             );
         `);
 
+        // User Activity Logs
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS user_activity (
+                id ${primaryKey},
+                userId VARCHAR(255),
+                action VARCHAR(100),
+                details TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        console.log('✅ Table verified: user_activity');
+
         // E2E Encryption
         await db.exec(`
             CREATE TABLE IF NOT EXISTS encryption_keys (
@@ -334,4 +346,5 @@ async function createTables(db) {
 }
 
 module.exports = { initDB, getDB: () => pool ? new MySQLWrapper(pool) : require('sqlite').open() };
+
 
