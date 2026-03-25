@@ -218,7 +218,81 @@ app.get('/api', (req, res) => {
     });
 });
 
-// --- ADMIN API ENDPOINTS ---
+// --- ADMIN & SUPPORT API ---
+
+// 🔐 Admin Login (Hardcoded or ENV based)
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    const adminUser = process.env.ADMIN_USER || 'admin';
+    const adminPass = process.env.ADMIN_PASS || 'admin123';
+
+    if (username === adminUser && password === adminPass) {
+        res.json({ success: true, token: 'fake-jwt-token-for-now' });
+    } else {
+        res.status(401).json({ error: 'Invalid credentials' });
+    }
+});
+
+// 📬 User Support / Help Report Submission
+app.post('/api/reports/submit', async (req, res) => {
+    const { userId, userName, phone, reason, message } = req.body;
+    if (!userId || !message) return res.status(400).json({ error: 'Missing data' });
+
+    try {
+        await db.run(
+            "INSERT INTO reports (reporterId, reportedId, reason, status) VALUES (?, ?, ?, ?)",
+            [userId, 'SUPPORT', `${reason || 'Support Request'}: ${message}`, 'pending']
+        );
+        
+        // Log activity
+        await db.run("INSERT INTO user_activity (userId, action, details) VALUES (?, ?, ?)", 
+            [userId, 'SUBMIT_REPORT', message.substring(0, 100)]);
+
+        res.json({ success: true, message: 'Report submitted successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 📝 User Activity Logging
+app.post('/api/log-activity', async (req, res) => {
+    const { userId, action, details } = req.body;
+    if (!userId || !action) return res.status(400).json({ error: 'Missing data' });
+    try {
+        await db.run("INSERT INTO user_activity (userId, action, details) VALUES (?, ?, ?)", [userId, action, details || '']);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 🛡️ Admin: Get Activity Logs
+app.get('/api/admin/logs', async (req, res) => {
+    try {
+        const logs = await db.all("SELECT a.*, u.name as userName FROM user_activity a LEFT JOIN users u ON a.userId = u.id ORDER BY a.timestamp DESC LIMIT 100");
+        res.json(logs);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 🛡️ Admin: Get User Reports / Support Tickets
+app.get('/api/admin/reports', async (req, res) => {
+    try {
+        const reports = await db.all("SELECT * FROM reports ORDER BY createdAt DESC");
+        res.json(reports);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 🛡️ Admin: Get Call History
+app.get('/api/admin/calls', async (req, res) => {
+    try {
+        const calls = await db.all(`
+            SELECT c.*, u1.name as callerName, u2.name as receiverName 
+            FROM calls c 
+            LEFT JOIN users u1 ON c.callerId = u1.id 
+            LEFT JOIN users u2 ON c.receiverId = u2.id 
+            ORDER BY timestamp DESC LIMIT 100
+        `);
+        res.json(calls);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // --- CALL REJECT API (for native Android Decline button when app is killed) ---
 app.post('/api/reject-call', async (req, res) => {
@@ -246,19 +320,21 @@ app.post('/api/reject-call', async (req, res) => {
     }
 });
 
-// 1. Get Real-Time Stats
+// 1. Get Real-Time Stats (Advanced)
 app.get('/api/admin/stats', async (req, res) => {
     try {
         const userCount = await db.get("SELECT COUNT(*) as count FROM users");
         const msgCount = await db.get("SELECT COUNT(*) as count FROM messages");
         const groupCount = await db.get("SELECT COUNT(*) as count FROM groups_table");
         const reportCount = await db.get("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'");
+        const callCount = await db.get("SELECT COUNT(*) as count FROM calls");
+        const statusCount = await db.get("SELECT COUNT(*) as count FROM status");
 
         const onlineIds = Array.from(new Set(onlineUsers.values()));
         let onlineDetails = [];
         if (onlineIds.length > 0) {
             const placeholders = onlineIds.map(() => '?').join(',');
-            onlineDetails = await db.all(`SELECT id, name, image FROM users WHERE id IN (${placeholders})`, onlineIds);
+            onlineDetails = await db.all(`SELECT id, name, image, phone FROM users WHERE id IN (${placeholders})`, onlineIds);
         }
 
         res.json({
@@ -266,6 +342,8 @@ app.get('/api/admin/stats', async (req, res) => {
             messages: msgCount?.count || 0,
             groups: groupCount?.count || 0,
             reports: reportCount?.count || 0,
+            calls: callCount?.count || 0,
+            statuses: statusCount?.count || 0,
             activeNow: onlineIds.length,
             onlineUsers: onlineDetails
         });
